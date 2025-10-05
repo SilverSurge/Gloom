@@ -72,11 +72,17 @@ func (b *Bloom) getIndices(value any) []uint64 {
 	m := b.n_bits
 
 	for i := uint64(0); i < uint64(b.n_hash); i++ {
-		index := (h1 + ((i*h2)%m)%m + m) % m
+		index := (h1 + (i*h2)%m) % m
 		indices[i] = index
 	}
 
 	return indices
+}
+
+func (b *Bloom) Reset() {
+	for i := range b.filter {
+		b.filter[i] = 0
+	}
 }
 
 // complie-time check

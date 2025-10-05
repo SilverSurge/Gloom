@@ -45,8 +45,7 @@ func (b *BloomAtomic) Add(value any) {
 			if old&mask != 0 {
 				break
 			}
-			new := old | mask
-			if atomic.CompareAndSwapUint64(&b.filter[wi], old, new) {
+			if atomic.CompareAndSwapUint64(&b.filter[wi], old, old|mask) {
 				break
 			}
 		}
@@ -87,11 +86,17 @@ func (b *BloomAtomic) getIndices(value any) []uint64 {
 	m := b.n_bits
 
 	for i := uint64(0); i < uint64(b.n_hash); i++ {
-		index := (h1 + ((i*h2)%m)%m + m) % m
+		index := (h1 + (i*h2)%m) % m
 		indices[i] = index
 	}
 
 	return indices
+}
+
+func (b *BloomAtomic) Reset() {
+	for i := range b.filter {
+		b.filter[i] = 0
+	}
 }
 
 // complie-time check

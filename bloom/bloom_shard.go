@@ -12,6 +12,12 @@ type BloomShard struct {
 	filter   []uint64
 	n_shards uint64
 	shards   []sync.RWMutex
+
+	len_long       uint64
+	len_short      uint64
+	n_long         uint64
+	n_short        uint64
+	boundary_index uint64
 }
 
 // `NewBloomShardDefault` return a default `BloomShard` object
@@ -31,7 +37,13 @@ func NewBloomShardCustom(id string, n_bits, n_hash, n_shards uint64, seeds [2]ui
 		filter:   make([]uint64, n_words),
 		n_shards: min(n_shards, n_bits),
 		shards:   make([]sync.RWMutex, n_shards),
+
+		len_long:  (n_bits + n_shards - 1) / n_shards,
+		len_short: n_bits / n_shards,
+		n_long:    n_bits % n_shards,
 	}
+	bloom.n_short = bloom.n_bits - bloom.n_long
+	bloom.boundary_index = bloom.n_long * bloom.len_long
 	return &bloom
 }
 
@@ -89,7 +101,7 @@ func (b *BloomShard) getIndices(value any) []uint64 {
 	m := b.n_bits
 
 	for i := uint64(0); i < uint64(b.n_hash); i++ {
-		index := (h1 + ((i*h2)%m)%m + m) % m
+		index := (h1 + (i*h2)%m) % m
 		indices[i] = index
 	}
 
@@ -98,34 +110,20 @@ func (b *BloomShard) getIndices(value any) []uint64 {
 
 // `getShardId`: find the shard id for a given index
 func (b *BloomShard) getShardId(idx uint64) uint64 {
-	// setup
-	n_bits := b.n_bits     // number of bits
-	n_shards := b.n_shards // number of shards
-
-	// solution
-
-	len_short := n_bits / n_shards                 // shorter shard length
-	len_long := (n_bits + n_shards - 1) / n_shards // longer shard length
-	n_long := n_bits % n_shards                    // number of longer shards
 
 	// shard layout
 	// [0, n_long-1] - longer shards
 	// [n_long, n_shards-1] - shorter shards
 
-	boundary_index := n_long * len_long
+	if idx < b.boundary_index {
+		return idx / b.len_long
+	}
+	return b.n_long + (idx-b.boundary_index)/b.len_short
+}
 
-	if idx < boundary_index {
-		return idx / len_long
-	} else {
-		relative_index := idx - boundary_index
-
-		if len_short == 0 {
-			// this should never happen
-			panic("BloomShard::getShardId: shorter shard length is 0\n")
-		}
-
-		shorter_shard_offset := relative_index / len_short
-		return n_long + shorter_shard_offset
+func (b *BloomShard) Reset() {
+	for i := range b.filter {
+		b.filter[i] = 0
 	}
 }
 
