@@ -103,3 +103,7 @@ It’s intentionally minimal for clarity and educational purposes.
 ## ⚖️ License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+
+## 📜 Change Log
+
+1. replace `[]bool` with `[]uint64` for memory optimization
