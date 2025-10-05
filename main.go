@@ -13,6 +13,7 @@ func main() {
 	n_hash := uint32(64)
 
 	bf := bloom.NewBloomDefault(id, n_bits, n_hash)
+	// bf := bloom.NewBloomCustom(id, n_bits, n_hash, [2]uint32{111,222})
 
 	// adding data
 	data1 := "silver"
