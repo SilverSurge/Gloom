@@ -1,6 +1,8 @@
 package bloom
 
-type Bloom struct {
+import "sync/atomic"
+
+type BloomAtomic struct {
 	id     string
 	n_bits uint32
 	n_hash uint32
@@ -8,16 +10,16 @@ type Bloom struct {
 	filter []uint64
 }
 
-// `NewBloomDefault` return a default `Bloom` object
-func NewBloomDefault(id string, n_bits, n_hash uint32) *Bloom {
+// `NewBloomAtomicDefault` return a default `BloomAtomic` object
+func NewBloomAtomicDefault(id string, n_bits, n_hash uint32) *Bloom {
 	return NewBloomCustom(id, n_bits, n_hash, [2]uint32{DefaultSeed1, DefaultSeed2})
 }
 
-// `NewBloomCustom` return a custom `Bloom` object
-func NewBloomCustom(id string, n_bits, n_hash uint32, seeds [2]uint32) *Bloom {
+// `NewBloomAtomicCustom` return a custom `BloomAtomic` object
+func NewBloomAtomicCustom(id string, n_bits, n_hash uint32, seeds [2]uint32) *BloomAtomic {
 
 	n_words := (n_bits + 63) / 64
-	bloom := Bloom{
+	bloom := BloomAtomic{
 		id:     id,
 		n_bits: n_bits,
 		n_hash: n_hash,
@@ -28,7 +30,7 @@ func NewBloomCustom(id string, n_bits, n_hash uint32, seeds [2]uint32) *Bloom {
 }
 
 // `Add`: add a value to the set
-func (b *Bloom) Add(value any) {
+func (b *BloomAtomic) Add(value any) {
 	// find the indices
 	indices := b.getIndices(value)
 
@@ -36,12 +38,23 @@ func (b *Bloom) Add(value any) {
 	for _, index := range indices {
 		wi := index / 64
 		off := index % 64
-		b.filter[wi] |= (1 << off)
+		mask := uint64(1) << off
+
+		for {
+			old := atomic.LoadUint64(&b.filter[wi])
+			if old&mask != 0 {
+				break
+			}
+			new := old | mask
+			if atomic.CompareAndSwapUint64(&b.filter[wi], old, new) {
+				break
+			}
+		}
 	}
 }
 
-// `Check`: check a value to the set (false negative: never, false positives: maybe)
-func (b *Bloom) Check(value any) bool {
+// `Check: check a value to the set (false negative: never, false positives: maybe)
+func (b *BloomAtomic) Check(value any) bool {
 	// find the indices
 	indices := b.getIndices(value)
 
@@ -49,8 +62,10 @@ func (b *Bloom) Check(value any) bool {
 	for _, index := range indices {
 		wi := index / 64
 		off := index % 64
+		mask := uint64(1) << off
 
-		if (b.filter[wi] & (1 << off)) == 0 {
+		v := atomic.LoadUint64(&b.filter[wi])
+		if v&mask == 0 {
 			return false
 		}
 	}
@@ -59,7 +74,7 @@ func (b *Bloom) Check(value any) bool {
 }
 
 // `getIndices`: find filter indices
-func (b *Bloom) getIndices(value any) []uint32 {
+func (b *BloomAtomic) getIndices(value any) []uint32 {
 	// get bytes
 	data := toBytes(value)
 
@@ -80,4 +95,4 @@ func (b *Bloom) getIndices(value any) []uint32 {
 }
 
 // complie-time check
-var _ IBloom = (*Bloom)(nil)
+var _ IBloom = (*BloomAtomic)(nil)

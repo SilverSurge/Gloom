@@ -92,7 +92,7 @@ Check(value)
 ## 💡 Future Ideas
 
 * Add serialization/deserialization support
-* Introduce concurrency-safe version
+* ~~Introduce concurrency-safe version~~ ✅
 * Provide false-positive probability estimator
 
 ## 🌱 Inspiration
@@ -106,4 +106,5 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📜 Change Log
 
-1. replace `[]bool` with `[]uint64` for memory optimization
+1. Replace `[]bool` with `[]uint64` for memory optimization.
+2. Add concurrency safe versions: `BloomRW`, `BloomAtomic`, and `BloomShard`.

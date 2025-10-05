@@ -1,23 +1,27 @@
 package bloom
 
-type Bloom struct {
+import "sync"
+
+type BloomRW struct {
 	id     string
 	n_bits uint32
 	n_hash uint32
 	seeds  [2]uint32
 	filter []uint64
+
+	mu sync.RWMutex
 }
 
-// `NewBloomDefault` return a default `Bloom` object
-func NewBloomDefault(id string, n_bits, n_hash uint32) *Bloom {
-	return NewBloomCustom(id, n_bits, n_hash, [2]uint32{DefaultSeed1, DefaultSeed2})
+// `NewBloomRWDefault` return a default `BloomRW` object
+func NewBloomRWDefault(id string, n_bits, n_hash uint32) *BloomRW {
+	return NewBloomRWCustom(id, n_bits, n_hash, [2]uint32{DefaultSeed1, DefaultSeed2})
 }
 
-// `NewBloomCustom` return a custom `Bloom` object
-func NewBloomCustom(id string, n_bits, n_hash uint32, seeds [2]uint32) *Bloom {
+// `NewBloomRWCustom` return a custom `BloomRW` object
+func NewBloomRWCustom(id string, n_bits, n_hash uint32, seeds [2]uint32) *BloomRW {
 
 	n_words := (n_bits + 63) / 64
-	bloom := Bloom{
+	bloom := BloomRW{
 		id:     id,
 		n_bits: n_bits,
 		n_hash: n_hash,
@@ -28,9 +32,13 @@ func NewBloomCustom(id string, n_bits, n_hash uint32, seeds [2]uint32) *Bloom {
 }
 
 // `Add`: add a value to the set
-func (b *Bloom) Add(value any) {
+func (b *BloomRW) Add(value any) {
 	// find the indices
 	indices := b.getIndices(value)
+
+	// get write lock
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
 	// find word index and offset, and set it to true
 	for _, index := range indices {
@@ -41,9 +49,13 @@ func (b *Bloom) Add(value any) {
 }
 
 // `Check`: check a value to the set (false negative: never, false positives: maybe)
-func (b *Bloom) Check(value any) bool {
+func (b *BloomRW) Check(value any) bool {
 	// find the indices
 	indices := b.getIndices(value)
+
+	// get read lock
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
 	// // find word index and offset, and check if it is false
 	for _, index := range indices {
@@ -59,7 +71,7 @@ func (b *Bloom) Check(value any) bool {
 }
 
 // `getIndices`: find filter indices
-func (b *Bloom) getIndices(value any) []uint32 {
+func (b *BloomRW) getIndices(value any) []uint32 {
 	// get bytes
 	data := toBytes(value)
 
@@ -80,4 +92,4 @@ func (b *Bloom) getIndices(value any) []uint32 {
 }
 
 // complie-time check
-var _ IBloom = (*Bloom)(nil)
+var _ IBloom = (*BloomRW)(nil)
