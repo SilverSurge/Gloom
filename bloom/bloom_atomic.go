@@ -11,8 +11,8 @@ type BloomAtomic struct {
 }
 
 // `NewBloomAtomicDefault` return a default `BloomAtomic` object
-func NewBloomAtomicDefault(id string, n_bits, n_hash uint32) *Bloom {
-	return NewBloomCustom(id, n_bits, n_hash, [2]uint32{DefaultSeed1, DefaultSeed2})
+func NewBloomAtomicDefault(id string, n_bits, n_hash uint32) *BloomAtomic {
+	return NewBloomAtomicCustom(id, n_bits, n_hash, [2]uint32{DefaultSeed1, DefaultSeed2})
 }
 
 // `NewBloomAtomicCustom` return a custom `BloomAtomic` object
