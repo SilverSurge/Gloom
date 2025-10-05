@@ -12,14 +12,14 @@ import (
 )
 
 const (
-	DefaultSeed1 uint32 = 6269
-	DefaultSeed2 uint32 = 4241
+	DefaultSeed1 uint64 = 6269
+	DefaultSeed2 uint64 = 4241
 )
 
 // `hash`: returns murmur3 using a seed and data
-func hash(seed uint32, data []byte) uint32 {
+func hash(seed uint64, data []byte) uint64 {
 	// hash function
-	return murmur3.SeedSum32(seed, data)
+	return murmur3.SeedSum64(seed, data)
 }
 
 // `toBytes`: converts any to []byte
@@ -68,8 +68,8 @@ func toBytes(value any) []byte {
 	}
 }
 
-// `PositiveProbablityEstimate`: return probability of returning true, for a filter with n_bits, n_hash, and n_add Add operations.
-func FalsePositiveProbabilityEstimate(n_bits, n_hash, n_add uint32) float64 {
+// `GetPositiveProbablityEstimate`: return probability of returning true, for a filter with n_bits, n_hash, and n_add Add operations.
+func GetFalsePositiveProbabilityEstimate(n_bits, n_hash, n_add uint64) float64 {
 	b := float64(n_bits)
 	h := float64(n_hash)
 	a := float64(n_add)
@@ -77,4 +77,17 @@ func FalsePositiveProbabilityEstimate(n_bits, n_hash, n_add uint32) float64 {
 	p := math.Pow(float64(1)-math.Pow(float64(1)-h/b, a), h)
 
 	return p
+}
+
+func GetOptimalParameters(n_add uint64, prob_fp float64) (uint64, uint64) {
+
+	if prob_fp < 0 || prob_fp > 1 {
+		fmt.Println("GetOptimalParameters: prob_fp not in [0,1], using default 0.01")
+		prob_fp = 0.01
+	}
+
+	n_bits := uint64(math.Ceil(float64(-1) * float64(n_add) * math.Log(float64(prob_fp)) * math.Log2E * math.Log2E))
+	n_hash := uint64(math.Ceil(float64(n_bits) / float64(n_add) * math.Ln2))
+
+	return n_bits, n_hash
 }

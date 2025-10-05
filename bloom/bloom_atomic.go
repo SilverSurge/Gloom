@@ -4,19 +4,19 @@ import "sync/atomic"
 
 type BloomAtomic struct {
 	id     string
-	n_bits uint32
-	n_hash uint32
-	seeds  [2]uint32
+	n_bits uint64
+	n_hash uint64
+	seeds  [2]uint64
 	filter []uint64
 }
 
 // `NewBloomAtomicDefault` return a default `BloomAtomic` object
-func NewBloomAtomicDefault(id string, n_bits, n_hash uint32) *BloomAtomic {
-	return NewBloomAtomicCustom(id, n_bits, n_hash, [2]uint32{DefaultSeed1, DefaultSeed2})
+func NewBloomAtomicDefault(id string, n_bits, n_hash uint64) *BloomAtomic {
+	return NewBloomAtomicCustom(id, n_bits, n_hash, [2]uint64{DefaultSeed1, DefaultSeed2})
 }
 
 // `NewBloomAtomicCustom` return a custom `BloomAtomic` object
-func NewBloomAtomicCustom(id string, n_bits, n_hash uint32, seeds [2]uint32) *BloomAtomic {
+func NewBloomAtomicCustom(id string, n_bits, n_hash uint64, seeds [2]uint64) *BloomAtomic {
 
 	n_words := (n_bits + 63) / 64
 	bloom := BloomAtomic{
@@ -74,24 +74,24 @@ func (b *BloomAtomic) Check(value any) bool {
 }
 
 // `getIndices`: find filter indices
-func (b *BloomAtomic) getIndices(value any) []uint32 {
+func (b *BloomAtomic) getIndices(value any) []uint64 {
 	// get bytes
 	data := toBytes(value)
 
 	// get primary hashes
-	h1 := hash(b.seeds[0], data) % b.n_hash
-	h2 := hash(b.seeds[1], data) % b.n_hash
+	h1 := hash(b.seeds[0], data) % b.n_bits
+	h2 := hash(b.seeds[1], data) % b.n_bits
 
 	// use double hashing to generate n_hash indices
-	inidices := make([]uint32, b.n_hash)
+	indices := make([]uint64, b.n_hash)
 	m := b.n_bits
 
-	for i := uint32(0); i < uint32(b.n_hash); i++ {
+	for i := uint64(0); i < uint64(b.n_hash); i++ {
 		index := (h1 + ((i*h2)%m)%m + m) % m
-		inidices[i] = index
+		indices[i] = index
 	}
 
-	return inidices
+	return indices
 }
 
 // complie-time check

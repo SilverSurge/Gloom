@@ -1,24 +1,26 @@
 package bloom
 
-import "sync"
+import (
+	"sync"
+)
 
 type BloomShard struct {
 	id       string
-	n_bits   uint32
-	n_hash   uint32
-	seeds    [2]uint32
+	n_bits   uint64
+	n_hash   uint64
+	seeds    [2]uint64
 	filter   []uint64
-	n_shards uint32
+	n_shards uint64
 	shards   []sync.RWMutex
 }
 
 // `NewBloomShardDefault` return a default `BloomShard` object
-func NewBloomShardDefault(id string, n_bits, n_hash, n_shards uint32) *BloomShard {
-	return NewBloomShardCustom(id, n_bits, n_hash, n_shards, [2]uint32{DefaultSeed1, DefaultSeed2})
+func NewBloomShardDefault(id string, n_bits, n_hash, n_shards uint64) *BloomShard {
+	return NewBloomShardCustom(id, n_bits, n_hash, n_shards, [2]uint64{DefaultSeed1, DefaultSeed2})
 }
 
 // `NewBloomShardCustom` return a custom `BloomShard` object
-func NewBloomShardCustom(id string, n_bits, n_hash, n_shards uint32, seeds [2]uint32) *BloomShard {
+func NewBloomShardCustom(id string, n_bits, n_hash, n_shards uint64, seeds [2]uint64) *BloomShard {
 
 	n_words := (n_bits + 63) / 64
 	bloom := BloomShard{
@@ -44,7 +46,6 @@ func (b *BloomShard) Add(value any) {
 		off := index % 64
 
 		si := b.getShardId(index)
-
 		b.shards[si].Lock()
 		b.filter[wi] |= (1 << off)
 		b.shards[si].Unlock()
@@ -62,7 +63,6 @@ func (b *BloomShard) Check(value any) bool {
 		off := index % 64
 
 		si := b.getShardId(index)
-
 		b.shards[si].RLock()
 		is_reset := ((b.filter[wi] & (1 << off)) == 0)
 		b.shards[si].RUnlock()
@@ -76,28 +76,28 @@ func (b *BloomShard) Check(value any) bool {
 }
 
 // `getIndices`: find filter indices
-func (b *BloomShard) getIndices(value any) []uint32 {
+func (b *BloomShard) getIndices(value any) []uint64 {
 	// get bytes
 	data := toBytes(value)
 
 	// get primary hashes
-	h1 := hash(b.seeds[0], data) % b.n_hash
-	h2 := hash(b.seeds[1], data) % b.n_hash
+	h1 := hash(b.seeds[0], data) % b.n_bits
+	h2 := hash(b.seeds[1], data) % b.n_bits
 
 	// use double hashing to generate n_hash indices
-	inidices := make([]uint32, b.n_hash)
+	indices := make([]uint64, b.n_hash)
 	m := b.n_bits
 
-	for i := uint32(0); i < uint32(b.n_hash); i++ {
+	for i := uint64(0); i < uint64(b.n_hash); i++ {
 		index := (h1 + ((i*h2)%m)%m + m) % m
-		inidices[i] = index
+		indices[i] = index
 	}
 
-	return inidices
+	return indices
 }
 
 // `getShardId`: find the shard id for a given index
-func (b *BloomShard) getShardId(idx uint32) uint32 {
+func (b *BloomShard) getShardId(idx uint64) uint64 {
 	// setup
 	n_bits := b.n_bits     // number of bits
 	n_shards := b.n_shards // number of shards
@@ -115,7 +115,7 @@ func (b *BloomShard) getShardId(idx uint32) uint32 {
 	boundary_index := n_long * len_long
 
 	if idx < boundary_index {
-		return idx / n_long
+		return idx / len_long
 	} else {
 		relative_index := idx - boundary_index
 
@@ -125,7 +125,6 @@ func (b *BloomShard) getShardId(idx uint32) uint32 {
 		}
 
 		shorter_shard_offset := relative_index / len_short
-
 		return n_long + shorter_shard_offset
 	}
 }

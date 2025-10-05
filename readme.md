@@ -108,3 +108,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 1. Replace `[]bool` with `[]uint64` for memory optimization.
 2. Add concurrency safe versions: `BloomRW`, `BloomAtomic`, and `BloomShard`.
+3. Add `GetOptimalParameters` and `GetFalsePositiveProbabilityEstimate`

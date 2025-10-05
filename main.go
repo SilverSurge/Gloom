@@ -9,15 +9,22 @@ func main() {
 
 	// create a bloom filter
 	id := "default-bloom-filter-id"
-	n_bits := uint32(64 * 1e5)
-	n_hash := uint32(8)
-	n_add := uint32(1e6)
+
+	n_add := uint64(1e6)
+	prob_fp := float64(0.01)
+
+	n_bits, n_hash := bloom.GetOptimalParameters(n_add, prob_fp)
 
 	// estimate
-	fmt.Printf("FalsePositiveProbabilityEstimate: %.2f %%\n", 100*bloom.FalsePositiveProbabilityEstimate(n_bits, n_hash, n_add))
+	fmt.Printf("n_add: %d\n", n_add)
+	fmt.Printf("prob_fp: %.2f\n", prob_fp)
+	fmt.Printf("optimal n_bits: %d\n", n_bits)
+	fmt.Printf("optimal n_hash: %d\n", n_hash)
 
-	bf := bloom.NewBloomDefault(id, n_bits, n_hash)
-	// bf := bloom.NewBloomCustom(id, n_bits, n_hash, [2]uint32{111,222})
+	fmt.Printf("false positive probability estimate: %.4f %%\n", 100*bloom.GetFalsePositiveProbabilityEstimate(n_bits, n_hash, n_add))
+
+	bf := bloom.NewBloomShardDefault(id, n_bits, n_hash, 64)
+	// bf := bloom.NewBloomCustom(id, n_bits, n_hash, [2]uint64{111,222})
 
 	// adding data
 	data1 := "silver"
@@ -37,8 +44,7 @@ func main() {
 	bf.Add(data3)
 
 	// checking data
-	fmt.Println(bf.Check("palladium"))
-	fmt.Println(bf.Check(121))
-	fmt.Println(bf.Check(data2))
-
+	fmt.Println("not found 1:", bf.Check("palladium"))
+	fmt.Println("not found 2:", bf.Check(121))
+	fmt.Println("already present:", bf.Check(data2))
 }
