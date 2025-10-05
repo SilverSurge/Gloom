@@ -93,7 +93,7 @@ Check(value)
 
 * Add serialization/deserialization support
 * ~~Introduce concurrency-safe version~~ ✅
-* Provide false-positive probability estimator
+* ~~Provide false-positive probability estimator~~
 
 ## 🌱 Inspiration
 

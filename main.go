@@ -9,8 +9,12 @@ func main() {
 
 	// create a bloom filter
 	id := "default-bloom-filter-id"
-	n_bits := uint32(2 * 1e5)
-	n_hash := uint32(64)
+	n_bits := uint32(64 * 1e5)
+	n_hash := uint32(8)
+	n_add := uint32(1e6)
+
+	// estimate
+	fmt.Printf("FalsePositiveProbabilityEstimate: %.2f %%\n", 100*bloom.FalsePositiveProbabilityEstimate(n_bits, n_hash, n_add))
 
 	bf := bloom.NewBloomDefault(id, n_bits, n_hash)
 	// bf := bloom.NewBloomCustom(id, n_bits, n_hash, [2]uint32{111,222})

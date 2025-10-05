@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 
 	"github.com/twmb/murmur3"
@@ -65,4 +66,15 @@ func toBytes(value any) []byte {
 		}
 		return data
 	}
+}
+
+// `PositiveProbablityEstimate`: return probability of returning true, for a filter with n_bits, n_hash, and n_add Add operations.
+func FalsePositiveProbabilityEstimate(n_bits, n_hash, n_add uint32) float64 {
+	b := float64(n_bits)
+	h := float64(n_hash)
+	a := float64(n_add)
+
+	p := math.Pow(float64(1)-math.Pow(float64(1)-h/b, a), h)
+
+	return p
 }
