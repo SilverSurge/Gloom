@@ -3,13 +3,8 @@ package bloom
 import "sync"
 
 type BloomRW struct {
-	id     string
-	n_bits uint64
-	n_hash uint64
-	seeds  [2]uint64
-	filter []uint64
-
-	mu sync.RWMutex
+	State BloomDS
+	Mu    sync.RWMutex
 }
 
 // `NewBloomRWDefault` return a default `BloomRW` object
@@ -19,50 +14,51 @@ func NewBloomRWDefault(id string, n_bits, n_hash uint64) *BloomRW {
 
 // `NewBloomRWCustom` return a custom `BloomRW` object
 func NewBloomRWCustom(id string, n_bits, n_hash uint64, seeds [2]uint64) *BloomRW {
-
-	n_words := (n_bits + 63) / 64
 	bloom := BloomRW{
-		id:     id,
-		n_bits: n_bits,
-		n_hash: n_hash,
-		seeds:  seeds,
-		filter: make([]uint64, n_words),
+		State: NewBloomDSCustom(id, n_bits, n_hash, seeds),
 	}
 	return &bloom
+}
+
+// `NewBloomRWFromBloomDS`: return a `BloomRW` using the data from the bloom_ds
+func NewBloomRWFromBloomDS(b *BloomDS) *BloomRW {
+	bloom := NewBloomRWCustom(b.ID, b.NBits, b.NHash, b.Seeds)
+	bloom.Union(b)
+	return bloom
 }
 
 // `Add`: add a value to the set
 func (b *BloomRW) Add(value any) {
 	// find the indices
-	indices := b.getIndices(value)
+	indices := b.State.GetIndices(value)
 
 	// get write lock
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.Mu.Lock()
+	defer b.Mu.Unlock()
 
 	// find word index and offset, and set it to true
 	for _, index := range indices {
 		wi := index / 64
 		off := index % 64
-		b.filter[wi] |= (1 << off)
+		b.State.Filter[wi] |= (1 << off)
 	}
 }
 
 // `Check`: check a value to the set (false negative: never, false positives: maybe)
 func (b *BloomRW) Check(value any) bool {
 	// find the indices
-	indices := b.getIndices(value)
+	indices := b.State.GetIndices(value)
 
 	// get read lock
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	b.Mu.RLock()
+	defer b.Mu.RUnlock()
 
-	// // find word index and offset, and check if it is false
+	// find word index and offset, and check if it is false
 	for _, index := range indices {
 		wi := index / 64
 		off := index % 64
 
-		if (b.filter[wi] & (1 << off)) == 0 {
+		if (b.State.Filter[wi] & (1 << off)) == 0 {
 			return false
 		}
 	}
@@ -70,31 +66,14 @@ func (b *BloomRW) Check(value any) bool {
 	return true
 }
 
-// `getIndices`: find filter indices
-func (b *BloomRW) getIndices(value any) []uint64 {
-	// get bytes
-	data := toBytes(value)
-
-	// get primary hashes
-	h1 := hash(b.seeds[0], data) % b.n_bits
-	h2 := hash(b.seeds[1], data) % b.n_bits
-
-	// use double hashing to generate n_hash indices
-	indices := make([]uint64, b.n_hash)
-	m := b.n_bits
-
-	for i := uint64(0); i < uint64(b.n_hash); i++ {
-		index := (h1 + (i*h2)%m) % m
-		indices[i] = index
-	}
-
-	return indices
+// `Reset`: resets bloom_ds
+func (b *BloomRW) Reset() {
+	b.State.Reset()
 }
 
-func (b *BloomRW) Reset() {
-	for i := range b.filter {
-		b.filter[i] = 0
-	}
+// `Union`: tries state union
+func (b1 *BloomRW) Union(b2 *BloomDS) bool {
+	return b1.State.Union(b2)
 }
 
 // complie-time check

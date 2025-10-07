@@ -3,11 +3,7 @@ package bloom
 import "sync/atomic"
 
 type BloomAtomic struct {
-	id     string
-	n_bits uint64
-	n_hash uint64
-	seeds  [2]uint64
-	filter []uint64
+	State BloomDS
 }
 
 // `NewBloomAtomicDefault` return a default `BloomAtomic` object
@@ -17,22 +13,23 @@ func NewBloomAtomicDefault(id string, n_bits, n_hash uint64) *BloomAtomic {
 
 // `NewBloomAtomicCustom` return a custom `BloomAtomic` object
 func NewBloomAtomicCustom(id string, n_bits, n_hash uint64, seeds [2]uint64) *BloomAtomic {
-
-	n_words := (n_bits + 63) / 64
 	bloom := BloomAtomic{
-		id:     id,
-		n_bits: n_bits,
-		n_hash: n_hash,
-		seeds:  seeds,
-		filter: make([]uint64, n_words),
+		State: NewBloomDSCustom(id, n_bits, n_hash, seeds),
 	}
 	return &bloom
+}
+
+// `NewBloomAtomicFromBloomDS`: return a `BloomAtomic` using the data from the bloom_ds
+func NewBloomAtomicFromBloomDS(b *BloomDS) *BloomAtomic {
+	bloom := NewBloomAtomicCustom(b.ID, b.NBits, b.NHash, b.Seeds)
+	bloom.Union(b)
+	return bloom
 }
 
 // `Add`: add a value to the set
 func (b *BloomAtomic) Add(value any) {
 	// find the indices
-	indices := b.getIndices(value)
+	indices := b.State.GetIndices(value)
 
 	// find word index and offset, and set it to true
 	for _, index := range indices {
@@ -41,11 +38,11 @@ func (b *BloomAtomic) Add(value any) {
 		mask := uint64(1) << off
 
 		for {
-			old := atomic.LoadUint64(&b.filter[wi])
+			old := atomic.LoadUint64(&b.State.Filter[wi])
 			if old&mask != 0 {
 				break
 			}
-			if atomic.CompareAndSwapUint64(&b.filter[wi], old, old|mask) {
+			if atomic.CompareAndSwapUint64(&b.State.Filter[wi], old, old|mask) {
 				break
 			}
 		}
@@ -55,7 +52,7 @@ func (b *BloomAtomic) Add(value any) {
 // `Check: check a value to the set (false negative: never, false positives: maybe)
 func (b *BloomAtomic) Check(value any) bool {
 	// find the indices
-	indices := b.getIndices(value)
+	indices := b.State.GetIndices(value)
 
 	// // find word index and offset, and check if it is false
 	for _, index := range indices {
@@ -63,7 +60,7 @@ func (b *BloomAtomic) Check(value any) bool {
 		off := index % 64
 		mask := uint64(1) << off
 
-		v := atomic.LoadUint64(&b.filter[wi])
+		v := atomic.LoadUint64(&b.State.Filter[wi])
 		if v&mask == 0 {
 			return false
 		}
@@ -72,31 +69,14 @@ func (b *BloomAtomic) Check(value any) bool {
 	return true
 }
 
-// `getIndices`: find filter indices
-func (b *BloomAtomic) getIndices(value any) []uint64 {
-	// get bytes
-	data := toBytes(value)
-
-	// get primary hashes
-	h1 := hash(b.seeds[0], data) % b.n_bits
-	h2 := hash(b.seeds[1], data) % b.n_bits
-
-	// use double hashing to generate n_hash indices
-	indices := make([]uint64, b.n_hash)
-	m := b.n_bits
-
-	for i := uint64(0); i < uint64(b.n_hash); i++ {
-		index := (h1 + (i*h2)%m) % m
-		indices[i] = index
-	}
-
-	return indices
+// `Reset`: resets bloom_ds
+func (b *BloomAtomic) Reset() {
+	b.State.Reset()
 }
 
-func (b *BloomAtomic) Reset() {
-	for i := range b.filter {
-		b.filter[i] = 0
-	}
+// `Union`: tries state union
+func (b1 *BloomAtomic) Union(b2 *BloomDS) bool {
+	return b1.State.Union(b2)
 }
 
 // complie-time check

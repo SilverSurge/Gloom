@@ -5,13 +5,9 @@ import (
 )
 
 type BloomShard struct {
-	id       string
-	n_bits   uint64
-	n_hash   uint64
-	seeds    [2]uint64
-	filter   []uint64
-	n_shards uint64
-	shards   []sync.RWMutex
+	State   BloomDS
+	NShards uint64
+	Shards  []sync.RWMutex
 
 	len_long       uint64
 	len_short      uint64
@@ -28,29 +24,31 @@ func NewBloomShardDefault(id string, n_bits, n_hash, n_shards uint64) *BloomShar
 // `NewBloomShardCustom` return a custom `BloomShard` object
 func NewBloomShardCustom(id string, n_bits, n_hash, n_shards uint64, seeds [2]uint64) *BloomShard {
 
-	n_words := (n_bits + 63) / 64
 	bloom := BloomShard{
-		id:       id,
-		n_bits:   n_bits,
-		n_hash:   n_hash,
-		seeds:    seeds,
-		filter:   make([]uint64, n_words),
-		n_shards: min(n_shards, n_bits),
-		shards:   make([]sync.RWMutex, n_shards),
+		State:   NewBloomDSCustom(id, n_bits, n_hash, seeds),
+		NShards: min(n_shards, n_bits),
+		Shards:  make([]sync.RWMutex, n_shards),
 
 		len_long:  (n_bits + n_shards - 1) / n_shards,
 		len_short: n_bits / n_shards,
 		n_long:    n_bits % n_shards,
 	}
-	bloom.n_short = bloom.n_bits - bloom.n_long
+	bloom.n_short = bloom.NShards - bloom.n_long
 	bloom.boundary_index = bloom.n_long * bloom.len_long
 	return &bloom
+}
+
+// `NewBloomShardFromBloomDS`: return a `BloomShard` using the data from the bloom_ds
+func NewBloomShardFromBloomDS(b *BloomDS, n_shard uint64) *BloomShard {
+	bloom := NewBloomShardCustom(b.ID, b.NBits, b.NHash, n_shard, b.Seeds)
+	bloom.Union(b)
+	return bloom
 }
 
 // `Add`: add a value to the set
 func (b *BloomShard) Add(value any) {
 	// find the indices
-	indices := b.getIndices(value)
+	indices := b.State.GetIndices(value)
 
 	// find word index and offset, and set it to true
 	for _, index := range indices {
@@ -58,16 +56,16 @@ func (b *BloomShard) Add(value any) {
 		off := index % 64
 
 		si := b.getShardId(index)
-		b.shards[si].Lock()
-		b.filter[wi] |= (1 << off)
-		b.shards[si].Unlock()
+		b.Shards[si].Lock()
+		b.State.Filter[wi] |= (1 << off)
+		b.Shards[si].Unlock()
 	}
 }
 
 // `Check`: check a value to the set (false negative: never, false positives: maybe)
 func (b *BloomShard) Check(value any) bool {
 	// find the indices
-	indices := b.getIndices(value)
+	indices := b.State.GetIndices(value)
 
 	// find word index and offset, and check if it is false
 	for _, index := range indices {
@@ -75,9 +73,9 @@ func (b *BloomShard) Check(value any) bool {
 		off := index % 64
 
 		si := b.getShardId(index)
-		b.shards[si].RLock()
-		is_reset := ((b.filter[wi] & (1 << off)) == 0)
-		b.shards[si].RUnlock()
+		b.Shards[si].RLock()
+		is_reset := ((b.State.Filter[wi] & (1 << off)) == 0)
+		b.Shards[si].RUnlock()
 
 		if is_reset {
 			return false
@@ -85,27 +83,6 @@ func (b *BloomShard) Check(value any) bool {
 	}
 
 	return true
-}
-
-// `getIndices`: find filter indices
-func (b *BloomShard) getIndices(value any) []uint64 {
-	// get bytes
-	data := toBytes(value)
-
-	// get primary hashes
-	h1 := hash(b.seeds[0], data) % b.n_bits
-	h2 := hash(b.seeds[1], data) % b.n_bits
-
-	// use double hashing to generate n_hash indices
-	indices := make([]uint64, b.n_hash)
-	m := b.n_bits
-
-	for i := uint64(0); i < uint64(b.n_hash); i++ {
-		index := (h1 + (i*h2)%m) % m
-		indices[i] = index
-	}
-
-	return indices
 }
 
 // `getShardId`: find the shard id for a given index
@@ -121,10 +98,14 @@ func (b *BloomShard) getShardId(idx uint64) uint64 {
 	return b.n_long + (idx-b.boundary_index)/b.len_short
 }
 
+// `Reset`: resets bloom_ds
 func (b *BloomShard) Reset() {
-	for i := range b.filter {
-		b.filter[i] = 0
-	}
+	b.State.Reset()
+}
+
+// `Union`: tries state union
+func (b1 *BloomShard) Union(b2 *BloomDS) bool {
+	return b1.State.Union(b2)
 }
 
 // complie-time check

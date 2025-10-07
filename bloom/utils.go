@@ -68,17 +68,18 @@ func toBytes(value any) []byte {
 	}
 }
 
-// `GetPositiveProbablityEstimate`: return probability of returning true, for a filter with n_bits, n_hash, and n_add Add operations.
+// `GetPositiveProbablityEstimate`: returns probability of getting true, for a filter with n_bits, n_hash, and n_add Add operations.
 func GetFalsePositiveProbabilityEstimate(n_bits, n_hash, n_add uint64) float64 {
 	b := float64(n_bits)
 	h := float64(n_hash)
 	a := float64(n_add)
 
-	p := math.Pow(float64(1)-math.Pow(float64(1)-h/b, a), h)
+	p_fp := math.Pow(float64(1)-math.Pow(float64(1)-h/b, a), h)
 
-	return p
+	return p_fp
 }
 
+// `GetOptimalParameters`: return optimal (n_bits, n_hash) for a given n_add, and prob_fp
 func GetOptimalParameters(n_add uint64, prob_fp float64) (uint64, uint64) {
 
 	if prob_fp < 0 || prob_fp > 1 {

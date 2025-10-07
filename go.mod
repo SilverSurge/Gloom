@@ -1,4 +1,4 @@
-module gloom
+module github.com/SilverSurge/Gloom
 
 go 1.24.5
 
