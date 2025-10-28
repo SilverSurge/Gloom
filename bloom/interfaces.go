@@ -5,4 +5,5 @@ type IBloom interface {
 	Check(any) bool
 	Reset()
 	Union(*BloomDS) bool
+	GetState() BloomDS
 }

@@ -76,5 +76,10 @@ func (b1 *BloomRW) Union(b2 *BloomDS) bool {
 	return b1.State.Union(b2)
 }
 
+// `GetState`: return current State bool
+func (b *BloomRW) GetState() BloomDS {
+	return b.State
+}
+
 // complie-time check
 var _ IBloom = (*BloomRW)(nil)
