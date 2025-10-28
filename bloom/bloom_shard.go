@@ -14,6 +14,7 @@ type BloomShard struct {
 	n_long         uint64
 	n_short        uint64
 	boundary_index uint64
+	rareMu         sync.RWMutex
 }
 
 // `NewBloomShardDefault` return a default `BloomShard` object
@@ -47,6 +48,10 @@ func NewBloomShardFromBloomDS(b *BloomDS, n_shard uint64) *BloomShard {
 
 // `Add`: add a value to the set
 func (b *BloomShard) Add(value any) {
+	// unionRW mutex
+	b.rareMu.RLock()
+	defer b.rareMu.RUnlock()
+
 	// find the indices
 	indices := b.State.GetIndices(value)
 
@@ -64,6 +69,10 @@ func (b *BloomShard) Add(value any) {
 
 // `Check`: check a value to the set (false negative: never, false positives: maybe)
 func (b *BloomShard) Check(value any) bool {
+	// unionRW mutex
+	b.rareMu.RLock()
+	defer b.rareMu.RUnlock()
+
 	// find the indices
 	indices := b.State.GetIndices(value)
 
@@ -100,16 +109,28 @@ func (b *BloomShard) getShardId(idx uint64) uint64 {
 
 // `Reset`: resets bloom_ds
 func (b *BloomShard) Reset() {
+	// unionRW mutex
+	b.rareMu.Lock()
+	defer b.rareMu.Unlock()
+
 	b.State.Reset()
 }
 
 // `Union`: tries state union
 func (b1 *BloomShard) Union(b2 *BloomDS) bool {
+	// unionRW mutex
+	b1.rareMu.RLock()
+	defer b1.rareMu.RUnlock()
+
 	return b1.State.Union(b2)
 }
 
 // `GetState`: return current State bool
 func (b *BloomShard) GetState() BloomDS {
+	// unionRW mutex
+	b.rareMu.Lock()
+	defer b.rareMu.Unlock()
+
 	return b.State
 }
 
